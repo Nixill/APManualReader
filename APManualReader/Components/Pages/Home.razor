@@ -1,0 +1,225 @@
+﻿@page "/"
+@using System.IO.Compression
+@using System.Text.RegularExpressions
+@using APManualReader.Components.Nixill
+@using System.Text
+
+<MudCard>
+  <MudCardHeader>
+    <MudText Typo="Typo.h5">Select file</MudText>
+  </MudCardHeader>
+  <MudCardContent>
+    <MudText>Select generated room file (.zip) or downloaded patch file (.apmanual) here:</MudText>
+    <MudFileUpload @bind-Files="File" @bind-Files:after="AfterFileChanged" DragAndDrop />
+    <MudCollapse Expanded="ShowFileError">
+      <MudText Color="Color.Error">@FileErrorText</MudText>
+    </MudCollapse>
+  </MudCardContent>
+</MudCard>
+
+<MudCollapse Expanded="ExpandPlayerPicker">
+  <MudDivider/>
+  <MudCard>
+    <MudCardHeader>
+      <MudText Typo="Typo.h5">Select player</MudText>
+    </MudCardHeader>
+    <MudCardContent>
+      <MudText>The file you've uploaded contains multiple Manual players. Please select one:</MudText>
+      <MudRadioGroup T="NamedEntry?" @bind-Value="SelectedPlayerSlot" @bind-Value:after="AfterPlayerSelected">
+        @foreach (var slot in ManualSlots)
+        {
+          <MudRadio T="NamedEntry?" Color="Color.Primary" Value="@slot">@slot.DisplayName</MudRadio>
+        }
+      </MudRadioGroup>
+    </MudCardContent>
+  </MudCard>
+</MudCollapse>
+
+<MudCollapse Expanded="ExpandFileViewer">
+  <MudDivider/>
+  <MudCard>
+    <MudCardHeader>
+      <MudText Typo="Typo.h5">Select file</MudText>
+    </MudCardHeader>
+    <MudCardContent>
+      <MudText>
+        The following files are present in your data. You probably shouldn't open them before the Manual tells you
+        to!
+      </MudText>
+      <MudCollapse Expanded="ShowFileViewerError">
+        <MudText Color="Color.Error">@FileViewerErrorText</MudText>
+      </MudCollapse>
+      <MudExpansionPanels MultiExpansion @ref="ExpansionPanelContainer">
+        @foreach (NamedEntry file in GameDataFiles)
+        {
+          <MudExpansionPanel Text="@file.DisplayName">
+            <NixFileViewer Entry="@file.Entry" />
+          </MudExpansionPanel>
+        }
+      </MudExpansionPanels>
+    </MudCardContent>
+  </MudCard>
+</MudCollapse>
+
+@code
+{
+  // File upload
+  private IBrowserFile? File = null;
+  private ZipArchive? OuterArchive = null;
+  private bool ShowFileError = false;
+  private string FileErrorText = "";
+
+  // Player picker
+  private bool ExpandPlayerPicker = false;
+  private NamedEntry[] ManualSlots = [];
+  private NamedEntry? SelectedPlayerSlot = null;
+
+  // File viewer
+  private bool ExpandFileViewer = false;
+  private ZipArchive? InnerArchive = null;
+  private bool ShowFileViewerError = false;
+  private string FileViewerErrorText = "";
+  private NamedEntry[] GameDataFiles = [];
+
+  private MudExpansionPanels? ExpansionPanelContainer { get; set; }
+
+  private readonly record struct NamedEntry(ZipArchiveEntry Entry, string DisplayName);
+
+  private async Task AfterFileChanged()
+  {
+    await ExpansionPanelContainer!.CollapseAllAsync();
+    await Task.Delay(500);
+
+    // File upload
+    OuterArchive = null;
+    ShowFileError = false;
+    FileErrorText = "";
+
+    // Player picker
+    ExpandPlayerPicker = false;
+    ManualSlots = [];
+    SelectedPlayerSlot = null;
+
+    // File viewer
+    ExpandFileViewer = false;
+    InnerArchive = null;
+    ShowFileViewerError = false;
+    GameDataFiles = [];
+    FileViewerErrorText = "";
+    
+    if (File is null)
+    {
+      StateHasChanged();
+      return;
+    }
+
+    try
+    {
+      OuterArchive = await ZipArchive.CreateAsync(File.OpenReadStream(maxAllowedSize: long.MaxValue), ZipArchiveMode.Read, false, Encoding.UTF8);
+    }
+    catch (InvalidDataException)
+    {
+      ShowFileError = true;
+      FileErrorText = "The selected file is not a valid zip archive.";
+      StateHasChanged();
+      return;
+    }
+
+    if (Path.GetExtension(File.Name).ToLower() == ".apmanual")
+      await HandleManualFileArchive(OuterArchive);
+    else
+      await HandleZipFile(OuterArchive);
+    StateHasChanged();
+  }
+
+  private async Task HandleZipFile(ZipArchive archive)
+  {
+    string? apName = archive.Entries.FirstOrDefault(e => e.Name.EndsWith(".archipelago"))?.Name;
+
+    if (apName is null)
+    {
+      ShowFileError = true;
+      FileErrorText = "The selected file doesn't appear to be Archipelago game data.";
+      StateHasChanged();
+      return;
+    }
+
+    apName = apName[..^12];
+
+    Regex manualMatcher = new($@"^{apName}_P(\d+)_(.+)\.apmanual");
+
+    ManualSlots = [
+      .. archive.Entries.Select(zae => (Entry: zae, Match: manualMatcher.Match(zae.FullName)))
+        .Where(tpl => tpl.Match.Success)
+        .Select(tpl => new NamedEntry(tpl.Entry, tpl.Match.Groups[2].Value))
+    ];
+
+    if (ManualSlots.Length == 0)
+    {
+      ShowFileError = true;
+      FileErrorText = "The selected Archipelago game data contains no Manual games.";
+      StateHasChanged();
+      return;
+    }
+
+    if (ManualSlots.Length == 1)
+    {
+      SelectedPlayerSlot = ManualSlots[0];
+      await HandleManualFile(ManualSlots[0].Entry.Open());
+      StateHasChanged();
+      return;
+    }
+
+    ExpandPlayerPicker = true;
+    StateHasChanged();
+  }
+
+  private async Task AfterPlayerSelected()
+  {
+    await ExpansionPanelContainer!.CollapseAllAsync();
+    await Task.Delay(500);
+
+    // File viewer
+    ExpandFileViewer = false;
+    InnerArchive = null;
+    ShowFileViewerError = false;
+    FileViewerErrorText = "";
+    GameDataFiles = [];
+
+    if (SelectedPlayerSlot is null)
+    {
+      StateHasChanged();
+      return;
+    }
+    var playerSlot = SelectedPlayerSlot.Value;
+
+    await HandleManualFile(playerSlot.Entry.Open());
+    StateHasChanged();
+  }
+
+  private async Task HandleManualFile(Stream stream)
+  {
+    try
+    {
+      await HandleManualFileArchive(new ZipArchive(stream, ZipArchiveMode.Read));
+    }
+    catch (InvalidDataException)
+    {
+      ShowFileViewerError = true;
+      FileViewerErrorText = "The selected .apmanual file is not a zip archive.";
+    }
+    StateHasChanged();
+  }
+
+  private async Task HandleManualFileArchive(ZipArchive archive)
+  {
+    ExpandFileViewer = true;
+
+    InnerArchive = archive;
+
+    GameDataFiles = [..
+      archive.Entries.Where(zae => zae.FullName.Length > 10 && zae.FullName.StartsWith("game_data/"))
+        .Select(zae => new NamedEntry(zae, zae.FullName[10..]))
+    ];
+  }
+}

@@ -1,0 +1,21 @@
+@using System.IO.Compression
+@using MimeTypes
+
+@if (Entry is null) return;
+
+@{
+  string mime = MimeTypeMap.GetMimeType(Path.GetExtension(Entry.Name));
+
+  MemoryStream ms = new();
+  Entry.Open().CopyTo(ms);
+  var b64string = Convert.ToBase64String(ms.ToArray());
+  string imageURL = $"data:{mime};base64,{b64string}";
+}
+
+<MudImage Src="@imageURL" />
+
+@code
+{
+  [Parameter]
+  public ZipArchiveEntry? Entry { get; set; }
+}
