@@ -1,0 +1,38 @@
+@using System.IO.Compression
+@using MimeTypes
+
+@{
+  if (Entry is null)
+  {
+    <MudText Color="Color.Error">No archive entry present.</MudText>
+    return;
+  }
+
+  string ext = Path.GetExtension(Entry.Name).ToLower();
+  string mimeType = MimeTypeMap.GetMimeType(ext);
+  string mimeTypeStart = mimeType.Split('/')[0];
+
+  <MudPaper>
+    @switch (mimeTypeStart)
+    {
+      case "text":
+        <NixTextFileViewer Entry="@Entry" />
+        break;
+      case "image":
+        <NixImageFileViewer Entry="@Entry" />
+        break;
+      case "audio":
+        <NixAudioFileViewer Entry="@Entry" />
+        break;
+      case "video":
+        <NixVideoFileViewer Entry="@Entry" />
+        break;
+    }
+  </MudPaper>
+}
+
+@code
+{
+  [Parameter]
+  public ZipArchiveEntry? Entry { get; set; }
+}

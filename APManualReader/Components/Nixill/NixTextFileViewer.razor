@@ -1,0 +1,21 @@
+@using System.IO.Compression
+
+@if (Entry is null) return;
+
+@{
+  string? fileContents = null;
+
+  using StreamReader reader = new StreamReader(Entry.Open());
+
+  fileContents = reader.ReadToEnd();
+}
+
+<pre style="overflow-x: auto;"><code>
+@fileContents
+</code></pre>
+
+@code
+{
+  [Parameter]
+  public ZipArchiveEntry? Entry { get; set; }
+}
