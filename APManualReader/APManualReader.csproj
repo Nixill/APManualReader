@@ -28,8 +28,8 @@
 
   <ItemGroup>
     <EmbeddedResource Include="wwwroot\**" />
-    <EmbeddedResource Include="..\Common\bin\Release\net8.0\publish\**" />
-    <EmbeddedResource Remove="..\Common\bin\Release\net8.0\publish\*.*" />
+    <EmbeddedResource Include="..\Common\bin\Release\net10.0\publish\**" />
+    <EmbeddedResource Remove="..\Common\bin\Release\net10.0\publish\*.*" />
   </ItemGroup>
 
   <ItemGroup>

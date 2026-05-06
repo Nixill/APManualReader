@@ -28,7 +28,7 @@ public class Program
         .SetSize(1400, 800)
         .SetLogVerbosity(0)
         .SetIconFile(iconPath)
-        .SetTitle("Photino.Blazor Embedded MudBlazor Sample");
+        .SetTitle("Manual Data Reader");
 
     AppDomain.CurrentDomain.UnhandledException += (_, error) =>
     {
