@@ -1,35 +1,32 @@
-using MudBlazor.Services;
 using APManualReader.Components;
+using Microsoft.Extensions.DependencyInjection;
+using Photino.Blazor;
+using MudBlazor.Services;
 
-var builder = WebApplication.CreateBuilder(args);
-
-// Add MudBlazor services
-builder.Services.AddMudServices();
-
-// Add services to the container.
-builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
-
-builder.WebHost.UseStaticWebAssets();
-
-var app = builder.Build();
-
-// Configure the HTTP request pipeline.
-if (!app.Environment.IsDevelopment())
+namespace APManualReader
 {
-  app.UseExceptionHandler("/Error", createScopeForErrors: true);
-  // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-  app.UseHsts();
+  class Program
+  {
+    [STAThread]
+    static void Main(string[] args)
+    {
+      var appBuilder = PhotinoBlazorAppBuilder.CreateDefault(args);
+
+      appBuilder.Services.AddLogging();
+      appBuilder.Services.AddMudServices();
+
+      appBuilder.RootComponents.Add<App>("app");
+
+      var app = appBuilder.Build();
+
+      app.MainWindow.SetTitle("Photino Blazor Sample");
+
+      AppDomain.CurrentDomain.UnhandledException += (sender, error) =>
+      {
+        app.MainWindow.ShowMessage("Fatal Exception", error.ExceptionObject.ToString());
+      };
+
+      app.Run();
+    }
+  }
 }
-app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-
-app.UseHttpsRedirection();
-
-
-app.UseAntiforgery();
-
-app.MapStaticAssets();
-app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
-
-app.Run();
